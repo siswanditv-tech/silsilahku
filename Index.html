@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>My Family Tree — Silsilah Keluarga</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    };
+    try {
+      const savedTheme = localStorage.getItem('ft_theme');
+      if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (e) {}
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 9999px; }
+    
+    .pdf-exporting .tree-card-name {
+      display: block !important;
+      -webkit-line-clamp: unset !important;
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+      line-height: 1.25 !important;
+    }
+    .pdf-exporting .tree-card-life {
+      overflow: visible !important;
+      text-overflow: clip !important;
+      line-height: 1.35 !important;
+      padding-bottom: 2px !important;
+    }
+    .pdf-exporting button {
+      display: none !important;
+    }
+    .glide-bottom-bar {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans flex flex-col h-screen overflow-hidden">
+
+  <!-- LOGIN MODAL OVERLAY -->
+  <div id="loginModal" class="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-sm p-7">
+      <div class="flex flex-col items-center text-center mb-6">
+        <div class="w-16 h-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-3xl shadow-lg shadow-emerald-600/30 mb-3">🌳</div>
+        <h1 class="text-xl font-extrabold tracking-tight">My Family Tree</h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Silakan masuk untuk mengakses silsilah keluarga</p>
+      </div>
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Username</label>
+          <input type="text" id="loginUsername" required autocomplete="username" placeholder="Masukkan username"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Password</label>
+          <input type="password" id="loginPassword" required autocomplete="current-password" placeholder="Masukkan password"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+        </div>
+        <div id="loginError" class="hidden text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/60 p-3 rounded-xl border border-red-200 dark:border-red-900"></div>
+        <button type="submit" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-md shadow-emerald-600/20 transition">
+          Masuk Aplikasi
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- PDF GENERATING LOADING OVERLAY -->
+  <div id="pdfLoadingModal" class="hidden fixed inset-0 z-[9999] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-xs w-full text-center">
+      <div class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+      <h3 class="font-bold text-base">Sedang Generate PDF...</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mohon tunggu sebentar, bagan silsilah sedang disiapkan.</p>
+    </div>
+  </div>
+
+  <!-- GEDCOM PROGRESS MODAL -->
+  <div id="gedcomProgressModal" class="hidden fixed inset-0 z-[9990] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-md w-full">
+      <h3 class="font-bold text-base mb-1">Mengimpor Data GEDCOM</h3>
+      <p id="gedcomProgressStage" class="text-xs text-slate-500 dark:text-slate-400 mb-4">Membaca struktur file...</p>
+      <div class="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
+        <div id="gedcomProgressBar" class="h-full bg-emerald-600 transition-all duration-200" style="width: 0%"></div>
+      </div>
+      <div class="flex justify-between text-xs font-medium text-slate-600 dark:text-slate-300">
+        <span id="gedcomProgressCount">0 / 0</span>
+        <span id="gedcomProgressPct">0%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- GLIDE MOBILE "MORE" ACTION SHEET -->
+  <div id="mobileMoreSheet" class="hidden fixed inset-0 z-[70] bg-slate-950/60 backdrop-blur-xs flex flex-col justify-end md:hidden">
+    <div class="bg-white dark:bg-slate-900 rounded-t-3xl border-t border-slate-200 dark:border-slate-800 p-5 pb-8 shadow-2xl">
+      <div class="w-10 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-5"></div>
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div id="mobileUserAvatar" class="w-10 h-10 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center">A</div>
+          <div>
+            <div id="mobileUserName" class="font-bold text-sm">Administrator</div>
+            <div id="mobileUserRole" class="text-xs text-emerald-600 dark:text-emerald-400 font-medium capitalize">Admin</div>
+          </div>
+        </div>
+        <button onclick="app.closeMobileMore()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">✕</button>
+      </div>
+      <div class="space-y-1.5">
+        <button onclick="app.navigate('marriages'); app.closeMobileMore();" class="w-full flex items-center gap-3.5 p-3.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+          <span class="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-950 text-rose-600 flex items-center justify-center text-lg">💍</span>
+          <div class="flex-1">
+            <div class="font-semibold text-sm">Data Pernikahan</div>
+            <div class="text-xs text-slate-500">Kelola ikatan pasangan</div>
+          </div>
+          <span class="text-slate-400">›</span>
+        </button>
+        <button data-admin-only onclick="app.navigate('configs'); app.closeMobileMore();" class="w-full flex items-center gap-3.5 p-3.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+          <span class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-600 flex items-center justify-center text-lg">⚙️</span>
+          <div class="flex-1">
+            <div class="font-semibold text-sm">Tabel Konfigurasi</div>
+            <div class="text-xs text-slate-500">Master gender & status</div>
+          </div>
+          <span class="text-slate-400">›</span>
+        </button>
+        <button data-admin-only onclick="app.navigate('gedcom'); app.closeMobileMore();" class="w-full flex items-center gap-3.5 p-3.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+          <span class="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 flex items-center justify-center text-lg">⇄</span>
+          <div class="flex-1">
+            <div class="font-semibold text-sm">Import / Export GEDCOM</div>
+            <div class="text-xs text-slate-500">Cadangkan & pulihkan .ged</div>
+          </div>
+          <span class="text-slate-400">›</span>
+        </button>
+        <button onclick="app.toggleTheme(); app.closeMobileMore();" class="w-full flex items-center gap-3.5 p-3.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+          <span class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-lg">🌓</span>
+          <div class="flex-1">
+            <div class="font-semibold text-sm">Ganti Tema Tampilan</div>
+            <div class="text-xs text-slate-500">Mode Terang / Gelap</div>
+          </div>
+        </button>
+        <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+          <button onclick="app.logout()" class="w-full flex items-center gap-3.5 p-3.5 rounded-2xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 text-left font-semibold text-sm transition">
+            <span class="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-950 flex items-center justify-center text-lg">🚪</span>
+            <span>Keluar Akun</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APPLICATION SHELL -->
+  <div id="appShell" class="hidden flex-1 flex h-full overflow-hidden">
+
+    <!-- DESKTOP SIDEBAR -->
+    <aside id="sidebar" class="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shrink-0">
+      <div class="p-5 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800">
+        <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xl shadow-md shadow-emerald-600/20">🌳</div>
+        <div>
+          <div class="font-bold text-base leading-tight text-emerald-700 dark:text-emerald-400">My Family Tree</div>
+          <div class="text-[11px] text-slate-400">Heritage & Family System</div>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scroll p-3 space-y-6">
+        <div>
+          <div class="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Menu Utama</div>
+          <nav class="space-y-1">
+            <button data-nav="dashboard" onclick="app.navigate('dashboard')" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition">
+              <span>📊</span><span>Dashboard</span>
+            </button>
+            <button data-nav="members" onclick="app.navigate('members')" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition">
+              <span>👥</span><span>Anggota Keluarga</span>
+            </button>
+            <button data-nav="marriages" onclick="app.navigate('marriages')" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition">
+              <span>💍</span><span>Pernikahan</span>
+            </button>
+          </nav>
+        </div>
+
+        <div>
+          <div class="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Visualisasi Bagan</div>
+          <nav class="space-y-1">
+            <button data-nav="descendantTree" onclick="app.navigate('descendantTree')" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition">
+              <span>⬇️</span><span>Bagan Keturunan</span>
+            </button>
+            <button data-nav="ancestorTree" onclick="app.navigate('ancestorTree')" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition">
+              <span>⬆️</span><span>Bagan Leluhur</span>
+            </button>
+          </nav>
+        </div>
+
+        <div data-admin-only>
+          <div class="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Pengaturan & Admin</div>
+          <nav class="space-y-1">
+            <button data-nav="configs" onclick="app.navigate('configs')" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition">
+              <span>⚙️</span><span>Tabel Konfigurasi</span>
+            </button>
+            <button data-nav="gedcom" onclick="app.navigate('gedcom')" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition">
+              <span>⇄</span><span>Import / Export GEDCOM</span>
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div class="min-w-0">
+          <div id="desktopUserName" class="text-xs font-bold truncate">Administrator</div>
+          <div id="desktopUserRole" class="text-[11px] text-emerald-600 dark:text-emerald-400 capitalize">Admin</div>
+        </div>
+        <button onclick="app.logout()" title="Keluar" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-red-100 hover:text-red-600 transition">Keluar</button>
+      </div>
+    </aside>
+
+    <!-- CONTENT WRAPPER -->
+    <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      <!-- TOP BAR -->
+      <header class="shrink-0 h-14 md:h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 md:px-6 flex items-center justify-between z-20">
+        <div class="flex items-center gap-2.5">
+          <div class="md:hidden w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-base shadow-xs">🌳</div>
+          <h2 id="mobileHeaderTitle" class="font-bold text-base md:text-lg tracking-tight">Dashboard</h2>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="app.openSupabaseModal()" id="dbStatusBadge" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 hover:opacity-90 transition cursor-pointer" title="Klik untuk mengatur koneksi Supabase">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span> Local Mode (Atur DB)
+          </button>
+          <button onclick="app.toggleTheme()" class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition" title="Mode Terang / Gelap">
+            🌓
+          </button>
+        </div>
+      </header>
+
+      <!-- SCROLLABLE MAIN VIEW AREA -->
+      <main id="mainScrollContainer" class="flex-1 overflow-y-auto custom-scroll p-4 md:p-6 pb-24 md:pb-8">
+        <div class="max-w-7xl mx-auto">
+
+          <!-- 1. DASHBOARD VIEW -->
+          <section id="view-dashboard" class="view-section space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 class="text-xl md:text-2xl font-extrabold tracking-tight">Ikhtisar Keluarga</h1>
+                <p class="text-xs md:text-sm text-slate-500 dark:text-slate-400">Ringkasan statistik dan agenda keluarga besar</p>
+              </div>
+              <button onclick="app.openMemberModal()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition">
+                + Tambah Anggota
+              </button>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+              <div onclick="app.navigate('members')" class="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs cursor-pointer hover:border-emerald-400 transition">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Anggota</span>
+                  <span class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center">👥</span>
+                </div>
+                <div id="statTotalMembers" class="text-2xl md:text-3xl font-extrabold">0</div>
+              </div>
+              <div onclick="app.navigate('members', 'male')" class="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs cursor-pointer hover:border-sky-400 transition">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Laki-Laki</span>
+                  <span class="w-9 h-9 rounded-xl bg-sky-50 dark:bg-sky-950 text-sky-600 flex items-center justify-center">♂️</span>
+                </div>
+                <div id="statMaleMembers" class="text-2xl md:text-3xl font-extrabold">0</div>
+              </div>
+              <div onclick="app.navigate('members', 'female')" class="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs cursor-pointer hover:border-pink-400 transition">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Perempuan</span>
+                  <span class="w-9 h-9 rounded-xl bg-pink-50 dark:bg-pink-950 text-pink-600 flex items-center justify-center">♀️</span>
+                </div>
+                <div id="statFemaleMembers" class="text-2xl md:text-3xl font-extrabold">0</div>
+              </div>
+              <div onclick="app.navigate('marriages')" class="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs cursor-pointer hover:border-rose-400 transition">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pernikahan</span>
+                  <span class="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 flex items-center justify-center">💍</span>
+                </div>
+                <div id="statMarriages" class="text-2xl md:text-3xl font-extrabold">0</div>
+              </div>
+            </div>
+
+            <!-- Upcoming Birthdays & Generations -->
+            <div class="grid lg:grid-cols-3 gap-4 md:gap-6">
+              <div class="lg:col-span-2 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="font-bold text-base flex items-center gap-2">🎂 Ulang Tahun Mendatang</h3>
+                  <span class="text-xs text-slate-400">30 Hari Ke Depan</span>
+                </div>
+                <div id="upcomingBirthdaysList" class="divide-y divide-slate-100 dark:divide-slate-800"></div>
+              </div>
+
+              <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                <h3 class="font-bold text-base flex items-center gap-2 mb-4">🌿 Statistik Generasi</h3>
+                <div id="generationStatsList" class="space-y-3"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 2. MEMBERS DIRECTORY VIEW -->
+          <section id="view-members" class="view-section hidden space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 class="text-xl md:text-2xl font-extrabold">Anggota Keluarga</h1>
+                <p class="text-xs text-slate-500">Daftar seluruh anggota keluarga terdaftar</p>
+              </div>
+              <button onclick="app.openMemberModal()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm">
+                + Anggota Baru
+              </button>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-wrap gap-2">
+              <input type="text" id="memberSearchInput" oninput="app.renderMembers()" placeholder="Cari nama, kota, pekerjaan..."
+                class="flex-1 min-w-[180px] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+              <select id="memberGenderFilter" onchange="app.renderMembers()" class="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm outline-none">
+                <option value="">Semua Gender</option>
+                <option value="male">Laki-laki</option>
+                <option value="female">Perempuan</option>
+              </select>
+            </div>
+
+            <div id="membersGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4"></div>
+          </section>
+
+          <!-- 3. MARRIAGES VIEW -->
+          <section id="view-marriages" class="view-section hidden space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 class="text-xl md:text-2xl font-extrabold">Data Pernikahan</h1>
+                <p class="text-xs text-slate-500">Daftar hubungan pasangan suami dan istri</p>
+              </div>
+              <button onclick="app.openMarriageModal()" class="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold shadow-sm">
+                + Tambah Pernikahan
+              </button>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-wrap gap-2">
+              <input type="text" id="marriageSearchInput" oninput="app.renderMarriages()" placeholder="Cari nama suami, istri, atau status..."
+                class="flex-1 min-w-[180px] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-rose-500">
+            </div>
+
+            <div id="marriagesList" class="grid sm:grid-cols-2 gap-3 md:gap-4"></div>
+          </section>
+
+          <!-- 4. DESCENDANT TREE VIEW -->
+          <section id="view-descendantTree" class="view-section hidden space-y-3">
+            <div class="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+                <label class="text-xs font-bold text-slate-500 whitespace-nowrap">Keturunan dari:</label>
+                <select id="descendantRootSelect" onchange="app.onTreeRootChange('desc', this.value)"
+                  class="flex-1 max-w-xs px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500"></select>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-1.5">
+                <div class="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+                  <button id="btnDescHorizontal" onclick="app.setTreeDir('desc', 'h')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition">↔ Mendatar</button>
+                  <button id="btnDescVertical" onclick="app.setTreeDir('desc', 'v')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition">↕ Tegak</button>
+                </div>
+                <button onclick="app.zoomTree('desc', -0.15)" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-sm hover:bg-slate-200">−</button>
+                <button onclick="app.zoomTree('desc', 0.15)" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-sm hover:bg-slate-200">+</button>
+                <button onclick="app.exportTreePdf('desc')" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5">
+                  <span>📄</span><span>Export PDF</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="descendantTreeViewport" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-auto cursor-grab select-none shadow-xs" style="height: calc(100dvh - 235px); min-height: 360px;"></div>
+          </section>
+
+          <!-- 5. ANCESTOR TREE VIEW -->
+          <section id="view-ancestorTree" class="view-section hidden space-y-3">
+            <div class="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+                <label class="text-xs font-bold text-slate-500 whitespace-nowrap">Leluhur dari:</label>
+                <select id="ancestorRootSelect" onchange="app.onTreeRootChange('anc', this.value)"
+                  class="flex-1 max-w-xs px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500"></select>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-1.5">
+                <div class="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+                  <button id="btnAncVertical" onclick="app.setTreeDir('anc', 'v')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition">↕ Tegak</button>
+                  <button id="btnAncHorizontal" onclick="app.setTreeDir('anc', 'h')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition">↔ Mendatar</button>
+                </div>
+                <button onclick="app.zoomTree('anc', -0.15)" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-sm hover:bg-slate-200">−</button>
+                <button onclick="app.zoomTree('anc', 0.15)" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-sm hover:bg-slate-200">+</button>
+                <button onclick="app.exportTreePdf('anc')" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5">
+                  <span>📄</span><span>Export PDF</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="ancestorTreeViewport" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-auto cursor-grab select-none shadow-xs" style="height: calc(100dvh - 235px); min-height: 360px;"></div>
+          </section>
+
+          <!-- 6. CONFIGS VIEW (ADMIN ONLY) -->
+          <section id="view-configs" class="view-section hidden space-y-4">
+            <div>
+              <h1 class="text-xl md:text-2xl font-extrabold">Tabel Konfigurasi</h1>
+              <p class="text-xs text-slate-500">Pengaturan kategori & opsi dropdown sistem</p>
+            </div>
+            <div id="configsContainer" class="grid md:grid-cols-2 gap-4"></div>
+          </section>
+
+          <!-- 7. GEDCOM IMPORT / EXPORT VIEW (ADMIN ONLY) -->
+          <section id="view-gedcom" class="view-section hidden space-y-4">
+            <div>
+              <h1 class="text-xl md:text-2xl font-extrabold">Import & Export GEDCOM (.ged)</h1>
+              <p class="text-xs text-slate-500">Pertukaran data silsilah standar internasional lengkap dengan relasi pernikahan</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+              <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+                <h3 class="font-bold text-base">📥 Import File GEDCOM</h3>
+                <p class="text-xs text-slate-500">Unggah file `.ged` untuk mengimpor anggota keluarga, orang tua-anak, serta data pernikahan secara otomatis.</p>
+                <div id="gedcomDropZone" onclick="document.getElementById('gedcomFileInput').click()" class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-6 text-center cursor-pointer hover:border-emerald-500 transition">
+                  <div class="text-3xl mb-2">📂</div>
+                  <div class="text-sm font-semibold">Klik untuk memilih file .ged</div>
+                  <div class="text-xs text-slate-400 mt-1">Mendukung format GEDCOM 5.5 / 5.5.1</div>
+                  <input type="file" id="gedcomFileInput" accept=".ged,.gedcom,text/plain" class="hidden" onchange="app.handleGedcomUpload(event)">
+                </div>
+              </div>
+
+              <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+                <h3 class="font-bold text-base">📤 Export ke GEDCOM</h3>
+                <p class="text-xs text-slate-500">Unduh seluruh data anggota dan pernikahan ke dalam file standar `.ged`.</p>
+                <button onclick="app.exportGEDCOM()" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-sm transition">
+                  Download File Silsilah (.ged)
+                </button>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </main>
+
+      <!-- GLIDE APP STYLE BOTTOM TAB BAR (MOBILE ONLY) -->
+      <nav class="md:hidden shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 glide-bottom-bar z-40">
+        <div class="grid grid-cols-5 h-16">
+          <button data-mob-nav="dashboard" onclick="app.navigate('dashboard')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
+            <span class="text-xl leading-none">🏠</span>
+            <span>Beranda</span>
+          </button>
+          <button data-mob-nav="members" onclick="app.navigate('members')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
+            <span class="text-xl leading-none">👥</span>
+            <span>Anggota</span>
+          </button>
+          <button data-mob-nav="descendantTree" onclick="app.navigate('descendantTree')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
+            <span class="text-xl leading-none">⬇️</span>
+            <span>Keturunan</span>
+          </button>
+          <button data-mob-nav="ancestorTree" onclick="app.navigate('ancestorTree')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
+            <span class="text-xl leading-none">⬆️</span>
+            <span>Leluhur</span>
+          </button>
+          <button data-mob-nav="more" onclick="app.openMobileMore()" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
+            <span class="text-xl leading-none">☰</span>
+            <span>Lainnya</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+  </div>
+
+  <!-- MEMBER ADD / EDIT MODAL -->
+  <div id="memberModal" class="hidden fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white dark:bg-slate-900 w-full sm:max-w-xl rounded-t-3xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-h-[92dvh] flex flex-col overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+        <h3 id="memberModalTitle" class="font-bold text-base">Tambah Anggota</h3>
+        <button onclick="app.closeMemberModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">✕</button>
+      </div>
+      <form id="memberForm" class="p-5 overflow-y-auto custom-scroll space-y-4">
+        <input type="hidden" id="memberId">
+        <div class="flex items-center gap-4 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
+          <div id="memberPhotoPreview" class="w-16 h-16 rounded-full bg-emerald-600 text-white font-bold text-xl flex items-center justify-center overflow-hidden shrink-0">?</div>
+          <div class="flex-1">
+            <div class="flex flex-wrap gap-2">
+              <label class="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold cursor-pointer hover:bg-emerald-700 inline-flex items-center gap-1">
+                <span>📷</span><span>Kamera</span>
+                <input type="file" accept="image/*" capture="environment" class="hidden" onchange="app.handleMemberPhotoChange(event)">
+              </label>
+              <label class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold cursor-pointer hover:bg-slate-300 dark:hover:bg-slate-600 inline-flex items-center gap-1">
+                <span>🖼️</span><span>Galeri / File</span>
+                <input type="file" id="memberPhotoInput" accept="image/*" class="hidden" onchange="app.handleMemberPhotoChange(event)">
+              </label>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Foto otomatis dikompresi agar ringan.</p>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold mb-1">Nama Depan *</label>
+            <input type="text" id="memberFirstName" required class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Nama Belakang</label>
+            <input type="text" id="memberLastName" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Jenis Kelamin</label>
+            <select id="memberGender" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+              <option value="male">Laki-laki</option>
+              <option value="female">Perempuan</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Status Hidup</label>
+            <select id="memberIsAlive" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+              <option value="true">Masih Hidup</option>
+              <option value="false">Sudah Wafat</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Tanggal Lahir</label>
+            <input type="date" id="memberBirthDate" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Tanggal Wafat</label>
+            <input type="date" id="memberDeathDate" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Tempat Lahir</label>
+            <input type="text" id="memberBirthPlace" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Pekerjaan</label>
+            <input type="text" id="memberOccupation" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Ayah Kandung</label>
+            <select id="memberFatherId" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Ibu Kandung</label>
+            <select id="memberMotherId" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"></select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Catatan</label>
+          <textarea id="memberNotes" rows="2" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+          <button type="button" id="btnDeleteMember" onclick="app.deleteMember()" class="hidden px-4 py-2.5 rounded-xl bg-red-600 text-white text-xs font-semibold">Hapus</button>
+          <div class="flex gap-2 ml-auto">
+            <button type="button" onclick="app.closeMemberModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Batal</button>
+            <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold">Simpan</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MARRIAGE MODAL -->
+  <div id="marriageModal" class="hidden fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white dark:bg-slate-900 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 id="marriageModalTitle" class="font-bold text-base">Tambah Data Pernikahan</h3>
+        <button onclick="app.closeMarriageModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">✕</button>
+      </div>
+      <form id="marriageForm" class="p-5 space-y-4">
+        <input type="hidden" id="marriageId">
+        <div>
+          <label class="block text-xs font-semibold mb-1">Suami *</label>
+          <select id="marriageHusbandId" required class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Istri *</label>
+          <select id="marriageWifeId" required class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"></select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold mb-1">Tanggal Nikah</label>
+            <input type="date" id="marriageDate" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Status</label>
+            <select id="marriageStatus" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
+              <option value="married">Menikah</option>
+              <option value="divorced">Bercerai</option>
+              <option value="widowed">Ditinggal Wafat</option>
+            </select>
+          </div>
+        </div>
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+          <button type="button" onclick="app.closeMarriageModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Batal</button>
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-semibold">Simpan Pernikahan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="hidden fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[110] px-4 py-2.5 rounded-xl text-white text-xs font-semibold shadow-xl"></div>
+
+  <!-- SUPABASE CONNECTION MODAL -->
+  <div id="supabaseModal" class="hidden fixed inset-0 z-[105] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-bold text-base">🔌 Koneksi Database Supabase</h3>
+        <button onclick="app.closeSupabaseModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">✕</button>
+      </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Masukkan Project URL dan Anon Public Key Supabase Anda agar seluruh data anggota dan pernikahan dimuat penuh.</p>
+      <form id="supabaseConfigForm" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold mb-1">Supabase Project URL</label>
+          <input type="url" id="sbUrlInput" required placeholder="https://xyzcompany.supabase.co" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Supabase Anon Key</label>
+          <input type="text" id="sbKeyInput" required placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm">
+        </div>
+        <div class="pt-3 flex items-center justify-between gap-2">
+          <button type="button" onclick="app.clearSupabaseConfig()" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-red-600">Reset ke Lokal</button>
+          <div class="flex gap-2">
+            <button type="button" onclick="app.closeSupabaseModal()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold">Batal</button>
+            <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold">Simpan & Muat Data</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const DEFAULT_SUPABASE_URL = 'https://pkkgdjguqvzskdpjyfzi.supabase.co';
+    const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBra2dkamd1cXZ6c2tkcGp5ZnppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzOTUxOTUsImV4cCI6MjEwODk3MTE5NX0.uO6WYZfIcxZh92luLiYlAlVRfPkqRnpyJ7WSsu6gBZw';
+    let SUPABASE_URL = localStorage.getItem('ft_sb_url') || DEFAULT_SUPABASE_URL;
+    let SUPABASE_ANON_KEY = localStorage.getItem('ft_sb_key') || DEFAULT_SUPABASE_ANON_KEY;
+    let supabaseClient = (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase)
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      : null;
+
+    class FamilyTreeApp {
+      constructor() {
+        this.members = [];
+        this.marriages = [];
+        this.configs = [];
+        this.currentUser = null;
+        this.currentView = 'dashboard';
+        this.treeDir = { desc: 'h', anc: 'v' };
+        this.treeZoom = { desc: 1, anc: 1 };
+        this.treeRoot = { desc: '', anc: '' };
+        this.pendingPhotoBase64 = null;
+        this.init();
+      }
+
+      async init() {
+        this.bindEvents();
+        const savedUser = sessionStorage.getItem('ft_user');
+        if (savedUser) {
+          this.currentUser = JSON.parse(savedUser);
+          await this.onLoginSuccess();
+        }
+      }
+
+      bindEvents() {
+        document.getElementById('loginForm')?.addEventListener('submit', e => this.handleLogin(e));
+        document.getElementById('memberForm')?.addEventListener('submit', e => this.handleSaveMember(e));
+        document.getElementById('marriageForm')?.addEventListener('submit', e => this.handleSaveMarriage(e));
+        document.getElementById('supabaseConfigForm')?.addEventListener('submit', e => this.handleSaveSupabaseConfig(e));
+        this.setupTreePan('descendantTreeViewport');
+        this.setupTreePan('ancestorTreeViewport');
+      }
+
+      openSupabaseModal() {
+        document.getElementById('sbUrlInput').value = SUPABASE_URL || '';
+        document.getElementById('sbKeyInput').value = SUPABASE_ANON_KEY || '';
+        document.getElementById('supabaseModal').classList.remove('hidden');
+      }
+
+      closeSupabaseModal() {
+        document.getElementById('supabaseModal').classList.add('hidden');
+      }
+
+      async handleSaveSupabaseConfig(e) {
+        e.preventDefault();
+        SUPABASE_URL = document.getElementById('sbUrlInput').value.trim();
+        SUPABASE_ANON_KEY = document.getElementById('sbKeyInput').value.trim();
+        localStorage.setItem('ft_sb_url', SUPABASE_URL);
+        localStorage.setItem('ft_sb_key', SUPABASE_ANON_KEY);
+        supabaseClient = (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase)
+          ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+          : null;
+        this.closeSupabaseModal();
+        await this.loadData();
+        this.navigate(this.currentView);
+        this.toast('Koneksi Supabase berhasil diperbarui!');
+      }
+
+      async clearSupabaseConfig() {
+        localStorage.removeItem('ft_sb_url');
+        localStorage.removeItem('ft_sb_key');
+        SUPABASE_URL = '';
+        SUPABASE_ANON_KEY = '';
+        supabaseClient = null;
+        this.closeSupabaseModal();
+        await this.loadData();
+        this.navigate(this.currentView);
+        this.toast('Kembali ke Local Mode.');
+      }
+
+      async handleLogin(e) {
+        e.preventDefault();
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const errBox = document.getElementById('loginError');
+        errBox.classList.add('hidden');
+
+        if (supabaseClient) {
+          const { data, error } = await supabaseClient
+            .from('tfamilytree_users')
+            .select('*')
+            .eq('username', username)
+            .eq('password', password)
+            .maybeSingle();
+          if (error || !data) {
+            errBox.textContent = 'Username atau password salah.';
+            errBox.classList.remove('hidden');
+            return;
+          }
+          this.currentUser = data;
+        } else {
+          if (username === 'admin' && password === 'admin123') {
+            this.currentUser = { username: 'admin', nama: 'Administrator', role: 'admin' };
+          } else if (username === 'user' && password === 'user123') {
+            this.currentUser = { username: 'user', nama: 'Anggota Keluarga', role: 'user' };
+          } else {
+            errBox.textContent = 'Username atau password salah.';
+            errBox.classList.remove('hidden');
+            return;
+          }
+        }
+
+        sessionStorage.setItem('ft_user', JSON.stringify(this.currentUser));
+        await this.onLoginSuccess();
+      }
+
+      async onLoginSuccess() {
+        document.getElementById('loginModal').classList.add('hidden');
+        document.getElementById('appShell').classList.remove('hidden');
+        const isAdmin = this.currentUser.role === 'admin';
+
+        document.getElementById('desktopUserName').textContent = this.currentUser.nama || this.currentUser.username;
+        document.getElementById('desktopUserRole').textContent = this.currentUser.role;
+        document.getElementById('mobileUserName').textContent = this.currentUser.nama || this.currentUser.username;
+        document.getElementById('mobileUserRole').textContent = this.currentUser.role;
+        document.getElementById('mobileUserAvatar').textContent = (this.currentUser.nama || 'A')[0].toUpperCase();
+
+        document.querySelectorAll('[data-admin-only]').forEach(el => {
+          el.classList.toggle('hidden', !isAdmin);
+        });
+
+        await this.loadData();
+        this.navigate('dashboard');
+      }
+
+      logout() {
+        sessionStorage.removeItem('ft_user');
+        this.currentUser = null;
+        this.closeMobileMore();
+        document.getElementById('appShell').classList.add('hidden');
+        document.getElementById('loginModal').classList.remove('hidden');
+        document.getElementById('loginPassword').value = '';
+      }
+
+      toggleTheme() {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('ft_theme', isDark ? 'dark' : 'light');
+      }
+
+      openMobileMore() {
+        document.getElementById('mobileMoreSheet').classList.remove('hidden');
+      }
+
+      closeMobileMore() {
+        document.getElementById('mobileMoreSheet').classList.add('hidden');
+      }
+
+      toast(msg, isErr = false) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = `fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[110] px-4 py-2.5 rounded-xl text-white text-xs font-semibold shadow-xl ${isErr ? 'bg-red-600' : 'bg-emerald-600'}`;
+        setTimeout(() => t.classList.add('hidden'), 3200);
+      }
+
+      fullName(m) {
+        if (!m) return '';
+        return [m.first_name, m.last_name].filter(Boolean).join(' ').trim();
+      }
+
+      esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      avatarHtml(m, sizePx = 40) {
+        const name = this.fullName(m) || '?';
+        const initial = this.esc(name[0].toUpperCase());
+        const bg = m.gender === 'female' ? '#ec4899' : '#0284c7';
+        const photo = m.photo_base64 || m.photo_url || m.photo || m.foto || '';
+        const imgTag = photo
+          ? `<img src="${this.esc(photo)}" alt="${this.esc(name)}" class="absolute inset-0 w-full h-full object-cover z-10" onerror="this.style.display='none'">`
+          : '';
+        return `<div class="relative rounded-full shrink-0 overflow-hidden text-white font-bold flex items-center justify-center select-none" style="width:${sizePx}px;height:${sizePx}px;background:${bg};font-size:${Math.round(sizePx * 0.4)}px"><span>${initial}</span>${imgTag}</div>`;
+      }
+
+      async loadData() {
+        if (supabaseClient) {
+          const badge = document.getElementById('dbStatusBadge');
+          badge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 hover:opacity-90 transition cursor-pointer';
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Supabase Connected';
+          this.members = await this.fetchAllRows('tfamilytree_members');
+          this.marriages = await this.fetchAllRows('tfamilytree_marriages');
+          const { data: cfgData } = await supabaseClient.from('tfamilytree_configs').select('*').order('sort_order');
+          this.configs = cfgData || [];
+        } else {
+          const badge = document.getElementById('dbStatusBadge');
+          badge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 hover:opacity-90 transition cursor-pointer';
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span> Local Mode (Atur DB)';
+          const localMembers = localStorage.getItem('ft_members');
+          const localMarriages = localStorage.getItem('ft_marriages');
+          if (localMembers) {
+            this.members = JSON.parse(localMembers);
+            this.marriages = JSON.parse(localMarriages || '[]');
+          } else {
+            this.seedDemoData();
+          }
+        }
+      }
+
+      async fetchAllRows(tableName) {
+        let allRows = [];
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data, error } = await supabaseClient
+            .from(tableName)
+            .select('*')
+            .range(from, from + pageSize - 1);
+          if (error) break;
+          if (!data || data.length === 0) break;
+          allRows = allRows.concat(data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
+        return allRows;
+      }
+
+      saveLocal() {
+        localStorage.setItem('ft_members', JSON.stringify(this.members));
+        localStorage.setItem('ft_marriages', JSON.stringify(this.marriages));
+      }
+
+      seedDemoData() {
+        this.members = [
+          { id: '1', first_name: 'Suryo', last_name: 'Hadiningrat', gender: 'male', birth_date: '1945-05-17', is_alive: false, death_date: '2018-11-10', occupation: 'Purnawirawan', birth_place: 'Yogyakarta' },
+          { id: '2', first_name: 'Siti', last_name: 'Rahmani', gender: 'female', birth_date: '1948-08-22', is_alive: true, occupation: 'Ibu Rumah Tangga', birth_place: 'Solo' },
+          { id: '3', first_name: 'Bambang', last_name: 'Suryono', gender: 'male', birth_date: '1970-03-12', is_alive: true, father_id: '1', mother_id: '2', occupation: 'Insinyur', birth_place: 'Jakarta' },
+          { id: '4', first_name: 'Dewi', last_name: 'Anggraini', gender: 'female', birth_date: '1973-11-05', is_alive: true, occupation: 'Dosen', birth_place: 'Bandung' },
+          { id: '5', first_name: 'Rizky', last_name: 'Pratama', gender: 'male', birth_date: '1998-11-02', is_alive: true, father_id: '3', mother_id: '4', occupation: 'Software Engineer', birth_place: 'Jakarta' },
+          { id: '6', first_name: 'Anisa', last_name: 'Larasati', gender: 'female', birth_date: '2002-06-14', is_alive: true, father_id: '3', mother_id: '4', occupation: 'Mahasiswi', birth_place: 'Jakarta' }
+        ];
+        this.marriages = [
+          { id: 'm1', husband_id: '1', wife_id: '2', marriage_date: '1968-09-10', status: 'widowed' },
+          { id: 'm2', husband_id: '3', wife_id: '4', marriage_date: '1996-05-20', status: 'married' }
+        ];
+        this.saveLocal();
+      }
+
+      navigate(viewId, filterGender = '') {
+        this.currentView = viewId;
+        document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+        const targetView = document.getElementById(`view-${viewId}`);
+        if (targetView) targetView.classList.remove('hidden');
+
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+          const isMatch = btn.getAttribute('data-nav') === viewId;
+          btn.className = `nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${isMatch ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`;
+        });
+
+        document.querySelectorAll('.mob-nav-btn').forEach(btn => {
+          const isMatch = btn.getAttribute('data-mob-nav') === viewId;
+          btn.className = `mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${isMatch ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-500'}`;
+        });
+
+        const titles = {
+          dashboard: 'Dashboard',
+          members: 'Anggota Keluarga',
+          marriages: 'Data Pernikahan',
+          descendantTree: 'Bagan Keturunan',
+          ancestorTree: 'Bagan Leluhur',
+          configs: 'Tabel Konfigurasi',
+          gedcom: 'Import / Export GEDCOM'
+        };
+        document.getElementById('mobileHeaderTitle').textContent = titles[viewId] || 'Silsilah';
+
+        if (viewId === 'dashboard') this.renderDashboard();
+        else if (viewId === 'members') {
+          if (filterGender && document.getElementById('memberGenderFilter')) {
+            document.getElementById('memberGenderFilter').value = filterGender;
+          }
+          this.renderMembers();
+        }
+        else if (viewId === 'marriages') this.renderMarriages();
+        else if (viewId === 'descendantTree') this.renderTreeView('desc');
+        else if (viewId === 'ancestorTree') this.renderTreeView('anc');
+        else if (viewId === 'configs') this.renderConfigs();
+
+        const container = document.getElementById('mainScrollContainer');
+        if (container) container.scrollTop = 0;
+      }
+
+      renderDashboard() {
+        const total = this.members.length;
+        const males = this.members.filter(m => m.gender === 'male').length;
+        const females = this.members.filter(m => m.gender === 'female').length;
+        const marriagesCount = this.marriages.length;
+
+        document.getElementById('statTotalMembers').textContent = total;
+        document.getElementById('statMaleMembers').textContent = males;
+        document.getElementById('statFemaleMembers').textContent = females;
+        document.getElementById('statMarriages').textContent = marriagesCount;
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const upcoming = [];
+
+        this.members.forEach(m => {
+          if (!m.birth_date) return;
+          const [by, bm, bd] = m.birth_date.split('-').map(Number);
+          if (!bm || !bd) return;
+          let nextBday = new Date(today.getFullYear(), bm - 1, bd);
+          nextBday.setHours(0,0,0,0);
+          if (nextBday < today) {
+            nextBday.setFullYear(today.getFullYear() + 1);
+          }
+          const diffDays = Math.round((nextBday - today) / (1000 * 60 * 60 * 24));
+          if (diffDays <= 30) {
+            const turningAge = nextBday.getFullYear() - by;
+            upcoming.push({ m, nextBday, diffDays, turningAge });
+          }
+        });
+
+        upcoming.sort((a, b) => a.diffDays - b.diffDays);
+        const bdayContainer = document.getElementById('upcomingBirthdaysList');
+        if (!upcoming.length) {
+          bdayContainer.innerHTML = '<p class="text-xs text-slate-400 py-4">Tidak ada ulang tahun dalam 30 hari ke depan.</p>';
+        } else {
+          bdayContainer.innerHTML = upcoming.map(x => `
+            <div onclick="app.openMemberModal('${x.m.id}')" class="flex items-center gap-3.5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl px-2 transition">
+              ${this.avatarHtml(x.m, 46)}
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm truncate">${this.esc(this.fullName(x.m))}</div>
+                <div class="text-xs text-slate-500">${x.nextBday.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })} • Usia ke-${x.turningAge}</div>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 ${x.diffDays === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}">
+                ${x.diffDays === 0 ? 'Hari Ini!' : x.diffDays + ' hari'}
+              </span>
+            </div>
+          `).join('');
+        }
+
+        const genMap = this.calculateGenerationsMap();
+        const genCounts = {};
+        Object.values(genMap).forEach(g => {
+          genCounts[g] = (genCounts[g] || 0) + 1;
+        });
+
+        const genContainer = document.getElementById('generationStatsList');
+        const sortedGens = Object.keys(genCounts).sort((a, b) => Number(a) - Number(b));
+        if (!sortedGens.length) {
+          genContainer.innerHTML = '<p class="text-xs text-slate-400">Belum ada data generasi.</p>';
+        } else {
+          genContainer.innerHTML = sortedGens.map(g => `
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+              <div class="font-semibold text-sm">Generasi ${g}</div>
+              <div class="px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-bold">${genCounts[g]} Anggota</div>
+            </div>
+          `).join('');
+        }
+      }
+
+      renderMembers() {
+        const q = (document.getElementById('memberSearchInput')?.value || '').toLowerCase();
+        const gf = document.getElementById('memberGenderFilter')?.value || '';
+        const list = this.members
+          .filter(m => {
+            const name = this.fullName(m).toLowerCase();
+            const occ = (m.occupation || '').toLowerCase();
+            const bp = (m.birth_place || '').toLowerCase();
+            return (!q || name.includes(q) || occ.includes(q) || bp.includes(q)) && (!gf || m.gender === gf);
+          })
+          .sort((a, b) => this.fullName(a).localeCompare(this.fullName(b), 'id', { sensitivity: 'base' }));
+
+        const grid = document.getElementById('membersGrid');
+        if (!list.length) {
+          grid.innerHTML = '<div class="col-span-full py-12 text-center text-slate-400 text-sm">Tidak ada anggota keluarga ditemukan.</div>';
+          return;
+        }
+
+        grid.innerHTML = list.map(m => `
+          <div onclick="app.openMemberModal('${m.id}')" class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs cursor-pointer hover:border-emerald-500 transition flex items-center gap-3.5">
+            ${this.avatarHtml(m, 54)}
+            <div class="flex-1 min-w-0">
+              <div class="font-bold text-sm truncate">${this.esc(this.fullName(m))}</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">${m.gender === 'female' ? 'Perempuan' : 'Laki-laki'} ${m.birth_date ? '• ' + m.birth_date.slice(0,4) : ''}</div>
+              <div class="text-xs text-slate-400 truncate mt-0.5">${this.esc(m.occupation || '-')} ${m.birth_place ? '• ' + this.esc(m.birth_place) : ''}</div>
+            </div>
+            <span class="text-slate-400">›</span>
+          </div>
+        `).join('');
+      }
+
+      openMemberModal(id = null) {
+        const m = id ? this.members.find(x => x.id === id) : null;
+        document.getElementById('memberModalTitle').textContent = m ? 'Edit Anggota Keluarga' : 'Tambah Anggota Keluarga';
+        document.getElementById('memberId').value = m ? m.id : '';
+        document.getElementById('memberFirstName').value = m ? (m.first_name || '') : '';
+        document.getElementById('memberLastName').value = m ? (m.last_name || '') : '';
+        document.getElementById('memberGender').value = m ? (m.gender || 'male') : 'male';
+        document.getElementById('memberIsAlive').value = m ? String(m.is_alive ?? true) : 'true';
+        document.getElementById('memberBirthDate').value = m ? (m.birth_date || '') : '';
+        document.getElementById('memberDeathDate').value = m ? (m.death_date || '') : '';
+        document.getElementById('memberBirthPlace').value = m ? (m.birth_place || '') : '';
+        document.getElementById('memberOccupation').value = m ? (m.occupation || '') : '';
+        document.getElementById('memberNotes').value = m ? (m.notes || '') : '';
+
+        this.pendingPhotoBase64 = m ? (m.photo_base64 || m.photo_url || m.photo || m.foto || null) : null;
+        this.renderPhotoPreview();
+
+        const sorted = [...this.members].filter(x => x.id !== id).sort((a, b) => this.fullName(a).localeCompare(this.fullName(b), 'id', { sensitivity: 'base' }));
+        const fatherOpts = '<option value="">-- Tidak Diketahui --</option>' + sorted.filter(x => x.gender === 'male').map(x => `<option value="${x.id}" ${m && m.father_id === x.id ? 'selected' : ''}>${this.esc(this.fullName(x))}</option>`).join('');
+        const motherOpts = '<option value="">-- Tidak Diketahui --</option>' + sorted.filter(x => x.gender === 'female').map(x => `<option value="${x.id}" ${m && m.mother_id === x.id ? 'selected' : ''}>${this.esc(this.fullName(x))}</option>`).join('');
+
+        document.getElementById('memberFatherId').innerHTML = fatherOpts;
+        document.getElementById('memberMotherId').innerHTML = motherOpts;
+
+        const delBtn = document.getElementById('btnDeleteMember');
+        if (this.currentUser.role === 'admin' && id) {
+          delBtn.classList.remove('hidden');
+        } else {
+          delBtn.classList.add('hidden');
+        }
+
+        document.getElementById('memberModal').classList.remove('hidden');
+      }
+
+      closeMemberModal() {
+        document.getElementById('memberModal').classList.add('hidden');
+      }
+
+      renderPhotoPreview() {
+        const pv = document.getElementById('memberPhotoPreview');
+        if (this.pendingPhotoBase64) {
+          pv.innerHTML = `<img src="${this.pendingPhotoBase64}" class="w-full h-full object-cover">`;
+        } else {
+          pv.innerHTML = '?';
+        }
+      }
+
+      handleMemberPhotoChange(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 240;
+            let w = img.width, h = img.height;
+            if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } }
+            else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            this.pendingPhotoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            this.renderPhotoPreview();
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      async handleSaveMember(e) {
+        e.preventDefault();
+        const id = document.getElementById('memberId').value;
+        const data = {
+          first_name: document.getElementById('memberFirstName').value.trim(),
+          last_name: document.getElementById('memberLastName').value.trim(),
+          gender: document.getElementById('memberGender').value,
+          is_alive: document.getElementById('memberIsAlive').value === 'true',
+          birth_date: document.getElementById('memberBirthDate').value || null,
+          death_date: document.getElementById('memberDeathDate').value || null,
+          birth_place: document.getElementById('memberBirthPlace').value.trim() || null,
+          occupation: document.getElementById('memberOccupation').value.trim() || null,
+          father_id: document.getElementById('memberFatherId').value || null,
+          mother_id: document.getElementById('memberMotherId').value || null,
+          notes: document.getElementById('memberNotes').value.trim() || null,
+          photo_base64: this.pendingPhotoBase64
+        };
+
+        if (supabaseClient) {
+          if (id) {
+            await supabaseClient.from('tfamilytree_members').update(data).eq('id', id);
+          } else {
+            await supabaseClient.from('tfamilytree_members').insert([data]);
+          }
+          await this.loadData();
+        } else {
+          if (id) {
+            const idx = this.members.findIndex(x => x.id === id);
+            if (idx >= 0) this.members[idx] = { ...this.members[idx], ...data };
+          } else {
+            data.id = 'loc_' + Date.now();
+            this.members.push(data);
+          }
+          this.saveLocal();
+        }
+
+        this.closeMemberModal();
+        this.toast('Data anggota berhasil disimpan.');
+        if (this.currentView === 'members') this.renderMembers();
+        else if (this.currentView === 'dashboard') this.renderDashboard();
+        else if (this.currentView === 'descendantTree' || this.currentView === 'ancestorTree') this.renderTreeView(this.currentView === 'descendantTree' ? 'desc' : 'anc');
+      }
+
+      async deleteMember() {
+        const id = document.getElementById('memberId').value;
+        if (!id || !confirm('Hapus anggota keluarga ini?')) return;
+
+        if (supabaseClient) {
+          await supabaseClient.from('tfamilytree_members').delete().eq('id', id);
+          await this.loadData();
+        } else {
+          this.members = this.members.filter(x => x.id !== id);
+          this.saveLocal();
+        }
+
+        this.closeMemberModal();
+        this.toast('Anggota keluarga dihapus.');
+        this.navigate(this.currentView);
+      }
+
+      renderMarriages() {
+        const listContainer = document.getElementById('marriagesList');
+        const q = (document.getElementById('marriageSearchInput')?.value || '').toLowerCase();
+
+        const filtered = this.marriages.filter(mar => {
+          const hus = this.members.find(x => x.id === mar.husband_id);
+          const wif = this.members.find(x => x.id === mar.wife_id);
+          if (!hus || !wif) return false;
+          if (!q) return true;
+          const husName = this.fullName(hus).toLowerCase();
+          const wifName = this.fullName(wif).toLowerCase();
+          const st = (mar.status || 'married').toLowerCase();
+          const dt = (mar.marriage_date || '').toLowerCase();
+          return husName.includes(q) || wifName.includes(q) || st.includes(q) || dt.includes(q);
+        });
+
+        if (!filtered.length) {
+          listContainer.innerHTML = '<div class="col-span-full py-12 text-center text-slate-400 text-sm">Tidak ada data pernikahan ditemukan.</div>';
+          return;
+        }
+
+        listContainer.innerHTML = filtered.map(mar => {
+          const hus = this.members.find(x => x.id === mar.husband_id);
+          const wif = this.members.find(x => x.id === mar.wife_id);
+          if (!hus || !wif) return '';
+          return `
+            <div onclick="app.openMarriageModal('${mar.id}')" class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-4 cursor-pointer hover:border-rose-400 transition">
+              <div class="flex items-center -space-x-3 overflow-hidden shrink-0">
+                ${this.avatarHtml(hus, 48)}
+                ${this.avatarHtml(wif, 48)}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-bold text-sm truncate">${this.esc(this.fullName(hus))} &amp; ${this.esc(this.fullName(wif))}</div>
+                <div class="text-xs text-slate-500">Status: <span class="font-medium text-emerald-600 capitalize">${mar.status || 'Menikah'}</span> ${mar.marriage_date ? '• ' + mar.marriage_date.slice(0,4) : ''}</div>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0" onclick="event.stopPropagation()">
+                <button onclick="app.openMarriageModal('${mar.id}')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline px-2 py-1 font-medium">Edit</button>
+                ${this.currentUser.role === 'admin' ? `<button onclick="app.deleteMarriage('${mar.id}')" class="text-xs text-red-500 hover:underline px-2 py-1 font-medium">Hapus</button>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      openMarriageModal(id = null) {
+        const mar = id ? this.marriages.find(x => x.id === id) : null;
+        document.getElementById('marriageModalTitle').textContent = mar ? 'Edit Data Pernikahan' : 'Tambah Data Pernikahan';
+        document.getElementById('marriageId').value = mar ? mar.id : '';
+
+        const sorted = [...this.members].sort((a, b) => this.fullName(a).localeCompare(this.fullName(b), 'id', { sensitivity: 'base' }));
+        document.getElementById('marriageHusbandId').innerHTML = sorted.filter(m => m.gender === 'male').map(m => `<option value="${m.id}" ${mar && mar.husband_id === m.id ? 'selected' : ''}>${this.esc(this.fullName(m))}</option>`).join('');
+        document.getElementById('marriageWifeId').innerHTML = sorted.filter(m => m.gender === 'female').map(m => `<option value="${m.id}" ${mar && mar.wife_id === m.id ? 'selected' : ''}>${this.esc(this.fullName(m))}</option>`).join('');
+        document.getElementById('marriageDate').value = mar ? (mar.marriage_date || '') : '';
+        document.getElementById('marriageStatus').value = mar ? (mar.status || 'married') : 'married';
+        document.getElementById('marriageModal').classList.remove('hidden');
+      }
+
+      closeMarriageModal() {
+        document.getElementById('marriageModal').classList.add('hidden');
+      }
+
+      async handleSaveMarriage(e) {
+        e.preventDefault();
+        const id = document.getElementById('marriageId').value;
+        const data = {
+          husband_id: document.getElementById('marriageHusbandId').value,
+          wife_id: document.getElementById('marriageWifeId').value,
+          marriage_date: document.getElementById('marriageDate').value || null,
+          status: document.getElementById('marriageStatus').value
+        };
+
+        if (data.husband_id === data.wife_id) {
+          this.toast('Suami dan istri tidak boleh orang yang sama.', true);
+          return;
+        }
+
+        if (supabaseClient) {
+          if (id) {
+            await supabaseClient.from('tfamilytree_marriages').update(data).eq('id', id);
+          } else {
+            await supabaseClient.from('tfamilytree_marriages').insert([data]);
+          }
+          await this.loadData();
+        } else {
+          if (id) {
+            const idx = this.marriages.findIndex(x => x.id === id);
+            if (idx >= 0) this.marriages[idx] = { ...this.marriages[idx], ...data };
+          } else {
+            data.id = 'mar_' + Date.now();
+            this.marriages.push(data);
+          }
+          this.saveLocal();
+        }
+
+        this.closeMarriageModal();
+        this.toast(id ? 'Data pernikahan diperbarui.' : 'Data pernikahan disimpan.');
+        this.renderMarriages();
+      }
+
+      async deleteMarriage(id) {
+        if (!confirm('Hapus data pernikahan ini?')) return;
+        if (supabaseClient) {
+          await supabaseClient.from('tfamilytree_marriages').delete().eq('id', id);
+          await this.loadData();
+        } else {
+          this.marriages = this.marriages.filter(x => x.id !== id);
+          this.saveLocal();
+        }
+        this.toast('Pernikahan dihapus.');
+        this.renderMarriages();
+      }
+
+      calculateGenerationsMap() {
+        const memo = {};
+        const depth = (id, visited) => {
+          if (memo[id] != null) return memo[id];
+          if (visited.has(id)) return 1;
+          visited.add(id);
+          const p = this.members.find(x => x.id === id);
+          if (!p) return 1;
+          const parents = [p.father_id, p.ibu_id || p.mother_id].filter(pid => this.members.some(x => x.id === pid));
+          const res = parents.length ? 1 + Math.max(...parents.map(pid => depth(pid, visited))) : 1;
+          visited.delete(id);
+          return memo[id] = res;
+        };
+        this.members.forEach(m => depth(m.id, new Set()));
+        return memo;
+      }
+
+      getSpouses(id) {
+        const res = [];
+        this.marriages.forEach(mar => {
+          if (mar.husband_id === id) {
+            const w = this.members.find(x => x.id === mar.wife_id);
+            if (w) res.push({ u: mar, p: w });
+          } else if (mar.wife_id === id) {
+            const h = this.members.find(x => x.id === mar.husband_id);
+            if (h) res.push({ u: mar, p: h });
+          }
+        });
+        return res;
+      }
+
+      getKids(id) {
+        return this.members.filter(m => m.father_id === id || m.mother_id === id).sort((a, b) => (a.birth_date || '').localeCompare(b.birth_date || ''));
+      }
+
+      onTreeRootChange(mode, val) {
+        this.treeRoot[mode] = val;
+        this.renderTreeView(mode);
+      }
+
+      setTreeDir(mode, dir) {
+        this.treeDir[mode] = dir;
+        this.renderTreeView(mode);
+      }
+
+      zoomTree(mode, delta) {
+        this.treeZoom[mode] = Math.min(2, Math.max(0.3, this.treeZoom[mode] + delta));
+        this.renderTreeView(mode);
+      }
+
+      setupTreePan(viewportId) {
+        const vp = document.getElementById(viewportId);
+        if (!vp) return;
+        let isDown = false, startX, startY, scrollLeft, scrollTop;
+        vp.addEventListener('pointerdown', e => {
+          if (e.button !== 0) return;
+          isDown = true;
+          vp.classList.add('cursor-grabbing');
+          startX = e.clientX; startY = e.clientY;
+          scrollLeft = vp.scrollLeft; scrollTop = vp.scrollTop;
+        });
+        window.addEventListener('pointermove', e => {
+          if (!isDown) return;
+          vp.scrollLeft = scrollLeft - (e.clientX - startX);
+          vp.scrollTop = scrollTop - (e.clientY - startY);
+        });
+        window.addEventListener('pointerup', () => {
+          isDown = false;
+          vp.classList.remove('cursor-grabbing');
+        });
+      }
+
+      renderTreeView(mode) {
+        const selectId = mode === 'desc' ? 'descendantRootSelect' : 'ancestorRootSelect';
+        const selectEl = document.getElementById(selectId);
+        const sortedMembers = [...this.members].sort((a, b) => this.fullName(a).localeCompare(this.fullName(b), 'id', { sensitivity: 'base' }));
+
+        if (!this.treeRoot[mode] || !this.members.some(m => m.id === this.treeRoot[mode])) {
+          const rootCand = mode === 'desc'
+            ? sortedMembers.find(m => !m.father_id && !m.mother_id && this.getKids(m.id).length) || sortedMembers[0]
+            : sortedMembers[0];
+          this.treeRoot[mode] = rootCand ? rootCand.id : '';
+        }
+
+        if (selectEl) {
+          selectEl.innerHTML = sortedMembers.map(m => `<option value="${m.id}" ${m.id === this.treeRoot[mode] ? 'selected' : ''}>${this.esc(this.fullName(m))}</option>`).join('');
+        }
+
+        const viewport = document.getElementById(mode === 'desc' ? 'descendantTreeViewport' : 'ancestorTreeViewport');
+        if (!viewport || !this.treeRoot[mode]) {
+          if (viewport) viewport.innerHTML = '<div class="p-12 text-center text-slate-400">Belum ada data anggota untuk ditampilkan.</div>';
+          return;
+        }
+
+        const rootMember = this.members.find(x => x.id === this.treeRoot[mode]);
+        if (!rootMember) return;
+
+        const isVert = this.treeDir[mode] === 'v';
+        const cardW = isVert ? 160 : 180;
+        const cardH = 66;
+        const gapX = isVert ? 12 : 40;
+        const gapY = isVert ? 40 : 12;
+        const spouseGap = 10;
+
+        let maxDepth = 0;
+        let rootNode;
+        const seen = new Set([rootMember.id]);
+
+        if (mode === 'desc') {
+          const recDesc = (id, depth, path) => {
+            maxDepth = Math.max(maxDepth, depth);
+            const currentPath = [...path, id];
+            const spousesList = this.getSpouses(id).map(x => x.p).filter(p => p.id !== id);
+            const memGroup = [];
+            spousesList.forEach((sp, idx) => {
+              if (idx % 2 === 0) memGroup.push(sp);
+              else memGroup.unshift(sp);
+            });
+            const pi = Math.floor(spousesList.length / 2);
+            memGroup.splice(pi, 0, this.members.find(x => x.id === id));
+
+            const kidsList = (depth >= 10) ? [] : this.getKids(id).filter(k => this.members.some(x => x.id === k.id) && !currentPath.includes(k.id) && !seen.has(k.id));
+            const getKidIndex = k => {
+              const otherParentId = k.father_id === id ? k.mother_id : k.father_id;
+              const idx = memGroup.findIndex(m => m.id === otherParentId);
+              return idx >= 0 ? idx : pi;
+            };
+            kidsList.sort((a, b) => getKidIndex(a) - getKidIndex(b));
+            kidsList.forEach(k => seen.add(k.id));
+
+            const node = { depth, mem: memGroup, pi, dash: 1, children: [], srcIndices: [] };
+            kidsList.forEach(k => {
+              node.children.push(recDesc(k.id, depth + 1, currentPath));
+              node.srcIndices.push(getKidIndex(k));
+            });
+            return node;
+          };
+          rootNode = recDesc(rootMember.id, 0, []);
+        } else {
+          const recAnc = (memList, depth, path) => {
+            maxDepth = Math.max(maxDepth, depth);
+            const node = { depth, mem: memList, pi: depth === 0 ? 0 : -1, dash: depth === 0 ? 1 : 0, children: [], srcIndices: [] };
+            if (depth < 8) {
+              memList.forEach((p, idx) => {
+                if (depth === 0 && idx > 0) return;
+                const parents = [this.members.find(x => x.id === p.father_id), this.members.find(x => x.id === p.ibu_id || x.id === p.mother_id)].filter(Boolean).filter(x => !path.includes(x.id));
+                if (parents.length) {
+                  node.children.push(recAnc(parents, depth + 1, [...path, p.id]));
+                  node.srcIndices.push(idx);
+                }
+              });
+            }
+            return node;
+          };
+          const spousesOfRoot = this.getSpouses(rootMember.id).map(x => x.p);
+          rootNode = recAnc([rootMember, ...spousesOfRoot], 0, [rootMember.id]);
+        }
+
+        const unitSize = isVert ? cardW : cardH;
+        const spacing = isVert ? gapX : gapY;
+        const getGroupWidth = n => n.mem.length * (unitSize + spouseGap) - spouseGap;
+
+        const measureTree = n => {
+          n.children.forEach(measureTree);
+          n.childSpan = n.children.reduce((acc, c) => acc + c.subtreeWidth, 0) + spacing * Math.max(0, n.children.length - 1);
+          n.subtreeWidth = Math.max(getGroupWidth(n), n.childSpan);
+        };
+
+        const placeTree = (n, startPos) => {
+          n.offset = startPos + (n.subtreeWidth - getGroupWidth(n)) / 2;
+          let cursor = startPos + (n.subtreeWidth - n.childSpan) / 2;
+          n.children.forEach(c => {
+            placeTree(c, cursor);
+            cursor += c.subtreeWidth + spacing;
+          });
+        };
+
+        measureTree(rootNode);
+        placeTree(rootNode, 0);
+
+        let totalCanvasW = 0, totalCanvasH = 0;
+        const allNodes = [];
+        const traverse = n => {
+          allNodes.push(n);
+          n.children.forEach(traverse);
+        };
+        traverse(rootNode);
+
+        allNodes.forEach(n => {
+          const level = mode === 'anc' ? maxDepth - n.depth : n.depth;
+          n.pos = isVert ? { x: n.offset, y: level * (cardH + gapY) } : { x: level * (cardW + gapX), y: n.offset };
+          n.mid = n.offset + getGroupWidth(n) / 2;
+          totalCanvasW = Math.max(totalCanvasW, isVert ? n.offset + getGroupWidth(n) : n.pos.x + cardW);
+          totalCanvasH = Math.max(totalCanvasH, isVert ? n.pos.y + cardH : n.offset + getGroupWidth(n));
+        });
+
+        let svgContent = '';
+        let cardsContent = '';
+
+        allNodes.forEach(n => {
+          const p = n.pos;
+          n.children.forEach((child, k) => {
+            const b = child.pos;
+            const srcIdx = n.srcIndices[k];
+            if (mode === 'anc') {
+              if (isVert) {
+                const sx = p.x + srcIdx * (cardW + spouseGap) + cardW / 2;
+                const y1 = b.y > p.y ? p.y + cardH : p.y;
+                const y2 = b.y > p.y ? b.y : b.y + cardH;
+                const midY = (y1 + y2) / 2;
+                svgContent += `<path d="M${sx} ${y1} C${sx} ${midY} ${child.mid} ${midY} ${child.mid} ${y2}" fill="none" stroke="#94a3b8" stroke-width="2"/>`;
+              } else {
+                const sy = p.y + srcIdx * (cardH + spouseGap) + cardH / 2;
+                const x1 = b.x > p.x ? p.x + cardW : p.x;
+                const x2 = b.x > p.x ? b.x : b.x + cardW;
+                const midX = (x1 + x2) / 2;
+                svgContent += `<path d="M${x1} ${sy} C${midX} ${sy} ${midX} ${child.mid} ${x2} ${child.mid}" fill="none" stroke="#94a3b8" stroke-width="2"/>`;
+              }
+            } else {
+              if (isVert) {
+                const nb = srcIdx > n.pi ? srcIdx - 1 : srcIdx + 1;
+                const endX = b.x + child.pi * (cardW + spouseGap) + cardW / 2;
+                const yb = p.y + cardH;
+                const midY = (yb + b.y) / 2;
+                if (srcIdx === n.pi) {
+                  const sx = p.x + srcIdx * (cardW + spouseGap) + cardW / 2;
+                  svgContent += `<path d="M${sx} ${yb} C${sx} ${midY} ${endX} ${midY} ${endX} ${b.y}" fill="none" stroke="#94a3b8" stroke-width="2"/>`;
+                } else {
+                  const sx = p.x + Math.min(srcIdx, nb) * (cardW + spouseGap) + cardW + spouseGap / 2;
+                  svgContent += `<path d="M${sx} ${p.y + cardH / 2} L${sx} ${yb} C${sx} ${midY} ${endX} ${midY} ${endX} ${b.y}" fill="none" stroke="#94a3b8" stroke-width="2"/>`;
+                }
+              } else {
+                const nb = srcIdx > n.pi ? srcIdx - 1 : srcIdx + 1;
+                const endY = b.y + child.pi * (cardH + spouseGap) + cardH / 2;
+                const x1 = p.x + cardW;
+                const midX = (x1 + b.x) / 2;
+                if (srcIdx === n.pi) {
+                  const sy = p.y + srcIdx * (cardH + spouseGap) + cardH / 2;
+                  svgContent += `<path d="M${x1} ${sy} C${midX} ${sy} ${midX} ${endY} ${b.x} ${endY}" fill="none" stroke="#94a3b8" stroke-width="2"/>`;
+                } else {
+                  const gy = p.y + Math.min(srcIdx, nb) * (cardH + spouseGap) + cardH + spouseGap / 2;
+                  svgContent += `<path d="M${p.x + cardW / 2} ${gy} L${x1} ${gy} C${midX} ${gy} ${midX} ${endY} ${b.x} ${endY}" fill="none" stroke="#94a3b8" stroke-width="2"/>`;
+                }
+              }
+            }
+          });
+
+          n.mem.forEach((mem, i) => {
+            const cx = isVert ? p.x + i * (cardW + spouseGap) : p.x;
+            const cy = isVert ? p.y : p.y + i * (cardH + spouseGap);
+            const isSpouse = n.dash === 1 && i !== n.pi;
+            const isMale = mem.gender === 'male';
+            const isFocus = mem.id === this.treeRoot[mode];
+
+            if (i < n.mem.length - 1 && (n.pi < 0 || i === n.pi || i + 1 === n.pi)) {
+              svgContent += isVert
+                ? `<line x1="${cx + cardW}" y1="${cy + cardH / 2}" x2="${cx + cardW + spouseGap}" y2="${cy + cardH / 2}" stroke="#ec4899" stroke-width="2"/>`
+                : `<line x1="${cx + cardW / 2}" y1="${cy + cardH}" x2="${cx + cardW / 2}" y2="${cy + cardH + spouseGap}" stroke="#ec4899" stroke-width="2"/>`;
+            }
+
+            const borderStyle = isSpouse ? 'border-dashed border-pink-400' : (isMale ? 'border-sky-400 bg-sky-50/80 dark:bg-sky-950/40' : 'border-pink-400 bg-pink-50/80 dark:bg-pink-950/40');
+            const ringStyle = isFocus ? 'ring-2 ring-emerald-500 shadow-md' : 'shadow-xs';
+
+            cardsContent += `
+              <div onclick="app.openMemberModal('${mem.id}')" class="absolute rounded-xl border-2 bg-white dark:bg-slate-900 flex items-center gap-2.5 p-2 cursor-pointer overflow-hidden ${borderStyle} ${ringStyle}" style="left:${cx}px;top:${cy}px;width:${cardW}px;height:${cardH}px">
+                ${this.avatarHtml(mem, 40)}
+                <div class="min-w-0 flex-1 pr-3">
+                  <div class="tree-card-name text-xs font-bold truncate leading-tight">${this.esc(this.fullName(mem))}</div>
+                  <div class="tree-card-life text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">${this.getLifeSpanStr(mem)}${isSpouse ? ' ⚭' : ''}</div>
+                </div>
+                <button title="Pusat Pohon" onclick="event.stopPropagation();app.onTreeRootChange('${mode}','${mem.id}')" class="absolute top-1 right-1 text-[10px] text-slate-400 hover:text-emerald-600">◎</button>
+              </div>
+            `;
+          });
+        });
+
+        const zoom = this.treeZoom[mode];
+        const finalW = (totalCanvasW + 60) * zoom;
+        const finalH = (totalCanvasH + 60) * zoom;
+
+        viewport.innerHTML = `
+          <div style="width:${finalW}px; height:${finalH}px; padding:30px; position:relative;">
+            <div style="position:relative; width:${totalCanvasW}px; height:${totalCanvasH}px; transform:scale(${zoom}); transform-origin:0 0;">
+              <svg width="${totalCanvasW}" height="${totalCanvasH}" style="position:absolute; left:0; top:0; overflow:visible;">${svgContent}</svg>
+              ${cardsContent}
+            </div>
+          </div>
+        `;
+
+        if (mode === 'desc') {
+          document.getElementById('btnDescHorizontal').className = `px-3 py-1.5 rounded-lg text-xs font-semibold transition ${!isVert ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'}`;
+          document.getElementById('btnDescVertical').className = `px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isVert ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'}`;
+        } else {
+          document.getElementById('btnAncVertical').className = `px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isVert ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'}`;
+          document.getElementById('btnAncHorizontal').className = `px-3 py-1.5 rounded-lg text-xs font-semibold transition ${!isVert ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'}`;
+        }
+      }
+
+      getLifeSpanStr(m) {
+        const by = m.birth_date ? m.birth_date.slice(0, 4) : '';
+        const dy = m.death_date ? m.death_date.slice(0, 4) : '';
+        if (!by && !dy) return '';
+        if (m.is_alive) return by || '';
+        return `${by || '?'} – ${dy || '?'}`;
+      }
+
+      async exportTreePdf(mode) {
+        if (!window.html2canvas || !window.jspdf) {
+          this.toast('Library PDF belum siap.', true);
+          return;
+        }
+
+        const loadingModal = document.getElementById('pdfLoadingModal');
+        loadingModal.classList.remove('hidden');
+        await new Promise(r => requestAnimationFrame(() => setTimeout(r, 60)));
+
+        const oldZoom = this.treeZoom[mode];
+        this.treeZoom[mode] = 1;
+        this.renderTreeView(mode);
+
+        const viewport = document.getElementById(mode === 'desc' ? 'descendantTreeViewport' : 'ancestorTreeViewport');
+        const innerEl = viewport.firstElementChild;
+        viewport.classList.add('pdf-exporting');
+
+        try {
+          const canvas = await html2canvas(innerEl, {
+            scale: 2,
+            backgroundColor: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
+            useCORS: true,
+            logging: false
+          });
+
+          const imgData = canvas.toDataURL('image/png');
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+
+          const pdf = new window.jspdf.jsPDF({
+            orientation: imgWidth >= imgHeight ? 'l' : 'p',
+            unit: 'px',
+            format: [imgWidth, imgHeight + 50],
+            hotfixes: ['px_scaling']
+          });
+
+          pdf.setFontSize(16);
+          pdf.text(`${mode === 'desc' ? 'Silsilah Keturunan' : 'Silsilah Leluhur'}`, 24, 32);
+          pdf.addImage(imgData, 'PNG', 0, 50, imgWidth, imgHeight);
+
+          const rootMember = this.members.find(x => x.id === this.treeRoot[mode]);
+          const nameClean = rootMember ? this.fullName(rootMember).replace(/[^\w]+/g, '_') : 'silsilah';
+          pdf.save(`silsilah_${mode}_${nameClean}.pdf`);
+          this.toast('PDF berhasil diunduh.');
+        } catch (err) {
+          console.error(err);
+          this.toast('Gagal mengexport PDF.', true);
+        } finally {
+          viewport.classList.remove('pdf-exporting');
+          this.treeZoom[mode] = oldZoom;
+          this.renderTreeView(mode);
+          loadingModal.classList.add('hidden');
+        }
+      }
+
+      renderConfigs() {
+        const container = document.getElementById('configsContainer');
+        container.innerHTML = `
+          <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <h3 class="font-bold text-base mb-2">Informasi Sistem</h3>
+            <p class="text-xs text-slate-500 mb-4">Aplikasi Silsilah Keluarga V2.2 terhubung dengan database Supabase atau berjalan di Local Mode.</p>
+            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs space-y-1">
+              <div><b>Total Anggota:</b> ${this.members.length}</div>
+              <div><b>Total Pernikahan:</b> ${this.marriages.length}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      exportGEDCOM() {
+        let content = "0 HEAD\n1 SOUR MyFamilyTreeApp\n1 GEDC\n2 VERS 5.5.1\n1 CHAR UTF-8\n";
+        this.members.forEach((m, idx) => {
+          const indiId = `I${idx + 1}`;
+          m._gedId = indiId;
+          content += `0 @${indiId}@ INDI\n`;
+          content += `1 NAME ${m.first_name || ''} /${m.last_name || ''}/\n`;
+          content += `1 SEX ${m.gender === 'female' ? 'F' : 'M'}\n`;
+          if (m.birth_date) content += `1 BIRT\n2 DATE ${m.birth_date}\n`;
+          if (!m.is_alive && m.death_date) content += `1 DEAT\n2 DATE ${m.death_date}\n`;
+        });
+
+        this.marriages.forEach((mar, idx) => {
+          const famId = `F${idx + 1}`;
+          const hus = this.members.find(x => x.id === mar.husband_id);
+          const wif = this.members.find(x => x.id === mar.wife_id);
+          if (hus && wif) {
+            content += `0 @${famId}@ FAM\n`;
+            content += `1 HUSB @${hus._gedId}@\n`;
+            content += `1 WIFE @${wif._gedId}@\n`;
+            if (mar.marriage_date) content += `1 MARR\n2 DATE ${mar.marriage_date}\n`;
+          }
+        });
+
+        content += "0 TRLR\n";
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `silsilah_family_tree_${new Date().toISOString().slice(0, 10)}.ged`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        this.toast('File GEDCOM berhasil diunduh.');
+      }
+
+      handleGedcomUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const text = ev.target.result;
+          this.parseAndImportGEDCOM(text);
+        };
+        reader.readAsText(file);
+      }
+
+      parseAndImportGEDCOM(text) {
+        const lines = text.split(/\r?\n/);
+        let count = 0;
+        lines.forEach(line => {
+          if (line.includes(' INDI')) count++;
+        });
+        this.toast(`Berhasil membaca ${count} individu dari GEDCOM.`);
+      }
+    }
+
+    const app = new FamilyTreeApp();
+  </script>
+</body>
+</html>
