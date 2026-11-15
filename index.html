@@ -450,27 +450,27 @@
         </div>
       </main>
 
-      <!-- GLIDE APP STYLE BOTTOM TAB BAR (MOBILE ONLY) -->
-      <nav class="md:hidden shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 glide-bottom-bar z-40">
+      <!-- STANDARD MOBILE BOTTOM NAVIGATION BAR -->
+      <nav class="md:hidden shrink-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 z-40" style="padding-bottom:env(safe-area-inset-bottom, 0px)">
         <div class="grid grid-cols-5 h-16">
-          <button data-mob-nav="dashboard" onclick="app.navigate('dashboard')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
-            <span class="text-xl leading-none">🏠</span>
+          <button data-mob-nav="dashboard" onclick="app.navigate('dashboard')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-slate-500">
+            <span class="text-lg leading-none">📊</span>
             <span>Beranda</span>
           </button>
-          <button data-mob-nav="members" onclick="app.navigate('members')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
-            <span class="text-xl leading-none">👥</span>
+          <button data-mob-nav="members" onclick="app.navigate('members')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-slate-500">
+            <span class="text-lg leading-none">👥</span>
             <span>Anggota</span>
           </button>
-          <button data-mob-nav="descendantTree" onclick="app.navigate('descendantTree')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
-            <span class="text-xl leading-none">⬇️</span>
+          <button data-mob-nav="descendantTree" onclick="app.navigate('descendantTree')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-slate-500">
+            <span class="text-lg leading-none">⬇️</span>
             <span>Keturunan</span>
           </button>
-          <button data-mob-nav="ancestorTree" onclick="app.navigate('ancestorTree')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
-            <span class="text-xl leading-none">⬆️</span>
+          <button data-mob-nav="ancestorTree" onclick="app.navigate('ancestorTree')" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-slate-500">
+            <span class="text-lg leading-none">⬆️</span>
             <span>Leluhur</span>
           </button>
-          <button data-mob-nav="more" onclick="app.openMobileMore()" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-slate-500">
-            <span class="text-xl leading-none">☰</span>
+          <button data-mob-nav="more" onclick="app.openMobileMore()" class="mob-nav-btn flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-slate-500">
+            <span class="text-lg leading-none">☰</span>
             <span>Lainnya</span>
           </button>
         </div>
